@@ -8,37 +8,29 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+
     steps:
       - name: Trigger protected Vercel SERP sync
         env:
           APP_URL: ${{ secrets.VERCEL_APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
         run: |
           set -euo pipefail
 
-          if [ -z "${APP_URL:-}" ]; then
-            echo "ERROR: GitHub secret VERCEL_APP_URL kosong."
-            exit 1
-          fi
-          if [ -z "${CRON_SECRET:-}" ]; then
-            echo "ERROR: GitHub secret CRON_SECRET kosong."
-            exit 1
-          fi
+          BODY=$(mktemp)
 
-          RESPONSE_FILE="$(mktemp)"
-          HTTP_CODE=$(curl --show-error --silent \
-            --retry 1 \
-            --output "$RESPONSE_FILE" \
+          STATUS=$(curl --silent --show-error \
+            --output "$BODY" \
             --write-out "%{http_code}" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
-            "${APP_URL%/}/api/sync")
+            "${APP_URL%/}/api/sync" || true)
 
-          echo "HTTP status: ${HTTP_CODE}"
+          echo "HTTP status: $STATUS"
           echo "Response body:"
-          cat "$RESPONSE_FILE"
+          cat "$BODY"
           echo
 
-          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-            echo "Sync gagal. Lihat error JSON di atas."
+          if ! [[ "$STATUS" =~ ^2[0-9][0-9]$ ]]; then
             exit 1
           fi
