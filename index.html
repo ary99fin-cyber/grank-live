@@ -11,9 +11,9 @@
   <main class="shell">
     <section class="hero">
       <div>
-        <p class="eyebrow">GOOGLE SEARCH CONSOLE</p>
+        <p class="eyebrow">GOOGLE SERP RANK TRACKER</p>
         <h1>Google Rank Monitor</h1>
-        <p class="sub">Pantau average position keyword dari data resmi Search Console.</p>
+        <p class="sub">Cek posisi domain untuk keyword tertentu tanpa harus memiliki atau memverifikasi domain.</p>
       </div>
       <button id="refreshBtn" type="button">Refresh</button>
     </section>
@@ -22,54 +22,60 @@
 
     <section class="grid">
       <article class="card main-card">
-        <p class="label">Average Position Terbaru</p>
+        <p class="label">Posisi terbaru</p>
         <div class="rank-row">
           <strong id="position" class="position">—</strong>
           <span id="change" class="change">Menunggu data</span>
         </div>
-        <p id="partial" class="muted"></p>
+        <p id="foundInfo" class="muted"></p>
       </article>
 
       <article class="card">
         <p class="label">Keyword</p>
         <strong id="keyword">—</strong>
-        <p class="muted">Exact query</p>
+        <p class="muted">Google organic search</p>
       </article>
 
       <article class="card">
-        <p class="label">Domain</p>
+        <p class="label">Domain target</p>
         <strong id="domain">—</strong>
         <p id="scope" class="muted">—</p>
       </article>
 
       <article class="card">
-        <p class="label">Impressions</p>
-        <strong id="impressions">—</strong>
-        <p id="clicks" class="muted">Clicks: —</p>
+        <p class="label">Hasil diperiksa</p>
+        <strong id="resultsChecked">—</strong>
+        <p id="provider" class="muted">Provider: —</p>
       </article>
+    </section>
+
+    <section class="card result-card">
+      <p class="label">URL yang ditemukan</p>
+      <a id="resultLink" class="result-link muted" href="#" target="_blank" rel="noopener noreferrer">Belum ada</a>
+      <p id="resultTitle" class="result-title">—</p>
     </section>
 
     <section class="card chart-card">
       <div class="chart-header">
         <div>
           <p class="label">Riwayat posisi</p>
-          <h2>72 titik data terbaru</h2>
+          <h2>7 hari / 168 snapshot terakhir</h2>
         </div>
         <div class="legend"><span></span> Semakin kecil semakin bagus</div>
       </div>
       <canvas id="rankChart" width="1200" height="420" aria-label="Grafik posisi Google"></canvas>
-      <div id="emptyChart" class="empty hidden">Belum ada riwayat posisi untuk ditampilkan.</div>
+      <div id="emptyChart" class="empty hidden">Belum ada ranking yang ditemukan untuk digambar.</div>
     </section>
 
     <section class="card details">
-      <div><span>Jam data Google</span><strong id="dataHour">—</strong></div>
-      <div><span>Terakhir dicek</span><strong id="checkedAt">—</strong></div>
-      <div><span>Status sinkronisasi</span><strong id="syncStatus">—</strong></div>
+      <div><span>Waktu snapshot</span><strong id="dataHour">—</strong></div>
+      <div><span>Terakhir sinkron</span><strong id="checkedAt">—</strong></div>
+      <div><span>Status</span><strong id="syncStatus">—</strong></div>
     </section>
 
     <p class="footnote">
-      Catatan: angka yang ditampilkan adalah <b>average position</b> dari Google Search Console berdasarkan impression nyata,
-      bukan hasil snapshot SERP personal dari satu HP. Data terbaru Google dapat terlambat beberapa jam.
+      Catatan: hasil ini adalah snapshot SERP non-personal dari provider pencarian. Hasil Google di HP pribadi masih dapat berbeda
+      karena lokasi, akun, histori pencarian, eksperimen Google, dan personalisasi.
     </p>
   </main>
 

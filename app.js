@@ -18,7 +18,12 @@ function setAlert(message = '') {
   el.classList.toggle('hidden', !message);
 }
 
+function rankedHistory(history = []) {
+  return history.filter((x) => x?.found === true && Number.isFinite(Number(x.position)));
+}
+
 function drawChart(history) {
+  const ranked = rankedHistory(history);
   const canvas = $('rankChart');
   const empty = $('emptyChart');
   const ctx = canvas.getContext('2d');
@@ -30,7 +35,7 @@ function drawChart(history) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssWidth, cssHeight);
 
-  if (!history?.length) {
+  if (!ranked.length) {
     canvas.classList.add('hidden');
     empty.classList.remove('hidden');
     return;
@@ -41,10 +46,10 @@ function drawChart(history) {
   const pad = { l: 44, r: 18, t: 20, b: 38 };
   const w = cssWidth - pad.l - pad.r;
   const h = cssHeight - pad.t - pad.b;
-  const positions = history.map((x) => Number(x.position)).filter(Number.isFinite);
+  const positions = ranked.map((x) => Number(x.position));
   const min = Math.max(1, Math.floor(Math.min(...positions) - 1));
   const max = Math.max(min + 2, Math.ceil(Math.max(...positions) + 1));
-  const xAt = (i) => pad.l + (history.length === 1 ? w / 2 : (i / (history.length - 1)) * w);
+  const xAt = (i) => pad.l + (ranked.length === 1 ? w / 2 : (i / (ranked.length - 1)) * w);
   const yAt = (p) => pad.t + ((p - min) / (max - min)) * h;
 
   ctx.font = '12px system-ui';
@@ -52,15 +57,14 @@ function drawChart(history) {
   ctx.strokeStyle = '#263149';
   ctx.lineWidth = 1;
 
-  const steps = 5;
-  for (let i = 0; i <= steps; i++) {
-    const p = min + ((max - min) * i / steps);
+  for (let i = 0; i <= 5; i++) {
+    const p = min + ((max - min) * i / 5);
     const y = yAt(p);
     ctx.beginPath();
     ctx.moveTo(pad.l, y);
     ctx.lineTo(cssWidth - pad.r, y);
     ctx.stroke();
-    ctx.fillText(p.toFixed(1), 4, y + 4);
+    ctx.fillText(p.toFixed(0), 8, y + 4);
   }
 
   ctx.strokeStyle = '#72e1a6';
@@ -68,15 +72,15 @@ function drawChart(history) {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.beginPath();
-  history.forEach((point, i) => {
+  ranked.forEach((point, i) => {
     const x = xAt(i);
     const y = yAt(Number(point.position));
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   });
   ctx.stroke();
 
-  const last = history.at(-1);
-  const lastX = xAt(history.length - 1);
+  const last = ranked.at(-1);
+  const lastX = xAt(ranked.length - 1);
   const lastY = yAt(Number(last.position));
   ctx.fillStyle = '#72e1a6';
   ctx.beginPath();
@@ -84,7 +88,7 @@ function drawChart(history) {
   ctx.fill();
 
   ctx.fillStyle = '#93a0b5';
-  const firstLabel = new Date(history[0].data_hour).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day:'2-digit', month:'short', hour:'2-digit' });
+  const firstLabel = new Date(ranked[0].data_hour).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day:'2-digit', month:'short', hour:'2-digit' });
   const lastLabel = new Date(last.data_hour).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day:'2-digit', month:'short', hour:'2-digit' });
   ctx.fillText(firstLabel, pad.l, cssHeight - 10);
   const lastWidth = ctx.measureText(lastLabel).width;
@@ -104,45 +108,79 @@ async function load() {
 
     $('keyword').textContent = data.target.query;
     $('domain').textContent = data.target.domain;
-    $('scope').textContent = `${data.target.device} • ${data.target.country}`;
+    $('scope').textContent = `${data.target.device} • ${data.target.country}${data.target.location ? ` • ${data.target.location}` : ''}`;
 
-    if (data.latest) {
-      $('position').textContent = '#' + fmt.format(data.latest.position);
-      $('impressions').textContent = fmt.format(data.latest.impressions);
-      $('clicks').textContent = `Clicks: ${fmt.format(data.latest.clicks)} • CTR ${(Number(data.latest.ctr) * 100).toFixed(2)}%`;
-      $('dataHour').textContent = formatDate(data.latest.data_hour);
-      $('partial').textContent = data.latest.is_partial ? 'Data jam ini masih dapat berubah (partial).' : 'Data jam ini sudah tersedia dari Search Console.';
+    const latest = data.latest;
+    if (latest) {
+      const checked = Number(latest.results_checked || data.status?.results_checked || 0);
+      $('resultsChecked').textContent = checked ? `${checked}` : '—';
+      $('provider').textContent = `Provider: ${latest.provider || data.status?.provider || '—'}`;
+      $('dataHour').textContent = formatDate(latest.data_hour);
 
-      const change = $('change');
-      if (data.previous) {
-        const diff = Number(data.previous.position) - Number(data.latest.position);
-        if (Math.abs(diff) < 0.01) {
-          change.textContent = 'Tidak berubah';
-          change.className = 'change';
-        } else if (diff > 0) {
-          change.textContent = `↑ membaik ${fmt.format(diff)}`;
-          change.className = 'change good';
+      if (latest.found && Number.isFinite(Number(latest.position))) {
+        $('position').textContent = '#' + fmt.format(latest.position);
+        $('foundInfo').textContent = `Domain ditemukan di hasil organic Google.`;
+
+        const change = $('change');
+        if (data.previous_ranked) {
+          const diff = Number(data.previous_ranked.position) - Number(latest.position);
+          if (Math.abs(diff) < 0.01) {
+            change.textContent = 'Tidak berubah';
+            change.className = 'change';
+          } else if (diff > 0) {
+            change.textContent = `↑ naik ${fmt.format(diff)}`;
+            change.className = 'change good';
+          } else {
+            change.textContent = `↓ turun ${fmt.format(Math.abs(diff))}`;
+            change.className = 'change bad';
+          }
         } else {
-          change.textContent = `↓ turun ${fmt.format(Math.abs(diff))}`;
-          change.className = 'change bad';
+          change.textContent = 'Ranking ditemukan';
+          change.className = 'change good';
+        }
+
+        $('resultTitle').textContent = latest.result_title || '—';
+        if (latest.result_url) {
+          $('resultLink').textContent = latest.result_url;
+          $('resultLink').href = latest.result_url;
+          $('resultLink').classList.remove('disabled-link');
+        } else {
+          $('resultLink').textContent = 'URL tidak tersedia';
+          $('resultLink').href = '#';
+          $('resultLink').classList.add('disabled-link');
         }
       } else {
-        change.textContent = 'Data pertama';
-        change.className = 'change';
+        $('position').textContent = checked ? `>${checked}` : '—';
+        $('change').textContent = 'Tidak ditemukan';
+        $('change').className = 'change bad';
+        $('foundInfo').textContent = checked
+          ? `Domain tidak ditemukan pada ${checked} hasil organic yang diperiksa.`
+          : 'Belum ada hasil SERP.';
+        $('resultTitle').textContent = '—';
+        $('resultLink').textContent = 'Belum ditemukan';
+        $('resultLink').href = '#';
+        $('resultLink').classList.add('disabled-link');
       }
     } else {
       $('position').textContent = '—';
-      $('change').textContent = 'Belum ada data';
-      $('impressions').textContent = '0';
-      $('clicks').textContent = 'Clicks: 0';
+      $('change').textContent = 'Belum disinkronkan';
+      $('foundInfo').textContent = 'Jalankan workflow GitHub atau /api/sync terlebih dahulu.';
+      $('resultsChecked').textContent = '0';
+      $('provider').textContent = 'Provider: —';
       $('dataHour').textContent = '—';
-      $('partial').textContent = 'Google belum mengembalikan impression untuk filter ini.';
+      $('resultTitle').textContent = '—';
+      $('resultLink').textContent = 'Belum ada';
+      $('resultLink').href = '#';
     }
 
     $('checkedAt').textContent = formatDate(data.status?.last_checked_at);
     $('syncStatus').textContent = data.status?.status || 'waiting';
-    if (data.status?.status === 'error') setAlert(`Sinkronisasi terakhir error: ${data.status.message || 'unknown error'}`);
-    if (data.status?.status === 'no_data') setAlert('Sinkronisasi berhasil, tetapi Google belum memiliki data impression untuk keyword/filter ini pada rentang terbaru.');
+
+    if (data.status?.status === 'error') {
+      setAlert(`Sinkronisasi terakhir error: ${data.status.message || 'unknown error'}`);
+    } else if (data.status?.status === 'not_found') {
+      setAlert(data.status.message || 'Domain belum ditemukan pada SERP yang diperiksa.');
+    }
 
     drawChart(data.history || []);
   } catch (err) {
@@ -155,6 +193,6 @@ async function load() {
 }
 
 $('refreshBtn').addEventListener('click', load);
-window.addEventListener('resize', () => load());
+window.addEventListener('resize', load);
 load();
 setInterval(load, 60_000);

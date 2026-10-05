@@ -65,3 +65,8 @@ canvas { width:100%; height:auto; max-height:420px; }
   .position { font-size:54px !important; }
   .chart-header { flex-direction:column; }
 }
+.result-card { margin-top:14px; }
+.result-link { display:block; overflow-wrap:anywhere; color:var(--accent); text-decoration:none; }
+.result-link:hover { text-decoration:underline; }
+.result-link.disabled-link { pointer-events:none; color:var(--muted); }
+.result-title { margin:8px 0 0; font-size:14px; line-height:1.5; }

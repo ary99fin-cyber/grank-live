@@ -1,173 +1,133 @@
-# Google Rank Monitor — GitHub + Vercel + Supabase + Search Console
+# Google Rank Monitor — SERP version
 
-Starter project untuk memantau **average position** keyword dari **Google Search Console API**.
-Default contoh project ini:
+Versi ini **tidak memakai Google Search Console**, jadi domain yang dipantau tidak perlu menjadi milik Anda dan tidak perlu verifikasi DNS.
+
+Contoh default:
 
 - Keyword: `panen togel`
 - Domain: `panentogel.com`
-- Device: `MOBILE`
-- Country: `IDN`
-- Sinkronisasi: tiap jam melalui GitHub Actions
+- Device: `mobile`
+- Country/language: Indonesia (`id`)
+- Maksimum hasil yang diperiksa: 100
 
-> Penting: Search Console tidak memberi snapshot SERP real-time seperti membuka Google di satu HP. Nilai `position` adalah **average position** berdasarkan impression nyata dan data terbaru bisa terlambat beberapa jam.
+## Cara kerja
 
-## 1. Upload ke GitHub
+GitHub Actions menjalankan request setiap jam -> endpoint Vercel `/api/sync` -> SearchAPI.io Google Rank Tracking API -> posisi domain dicari pada hasil organic -> snapshot disimpan ke Supabase -> dashboard mengambil histori lewat `/api/data`.
 
-Upload seluruh isi folder ini ke repository GitHub. Jangan upload file `.env` atau JSON private key Google.
+> Penting: SERP API memberi snapshot pencarian non-personal. Hasil di HP pribadi masih dapat berbeda karena lokasi, akun, histori pencarian, eksperimen Google, dan personalisasi.
 
-## 2. Siapkan Supabase
+## 1. Jalankan ulang schema di Supabase
 
-1. Buka project Supabase.
-2. Masuk **SQL Editor**.
-3. Copy seluruh isi `schema.sql`, lalu **Run**.
-4. Buka **Connect** / **Settings → API Keys**.
-5. Ambil:
-   - Project URL → untuk `SUPABASE_URL`
-   - Secret key `sb_secret_...` → untuk `SUPABASE_SECRET_KEY`
-6. Secret key hanya dipasang di Vercel, jangan pernah dimasukkan ke `index.html` atau `app.js`.
+Karena Anda sebelumnya sudah memakai schema versi Search Console, buka:
 
-## 3. Pastikan domain ada di Google Search Console
+**Supabase -> SQL Editor -> New query**
 
-Tambahkan/verifikasi `panentogel.com` di Google Search Console terlebih dahulu.
+Paste seluruh isi `schema.sql` versi baru lalu klik **Run**.
 
-Jika memakai **Domain property**, nilai environment nanti:
+Schema ini aman dijalankan ulang. Ia menambahkan kolom SERP dan membuat `position` boleh kosong ketika domain tidak ditemukan.
 
-```text
-GSC_SITE_URL=sc-domain:panentogel.com
-```
+## 2. Buat API key SearchAPI.io
 
-Jika memakai **URL-prefix property**, contohnya:
+Buka:
 
-```text
-GSC_SITE_URL=https://panentogel.com/
-```
+https://www.searchapi.io/
 
-Nilainya harus sama persis dengan property yang ada di Search Console.
+Buat akun dan ambil API key. Simpan key tersebut. Jangan upload API key ke GitHub.
 
-## 4. Buat Google Cloud project + service account
+Dokumentasi endpoint yang dipakai:
 
-Tidak perlu menaruh kartu kredit untuk kode project ini.
+https://www.searchapi.io/docs/google-rank-tracking-api
 
-1. Buka Google Cloud Console.
-2. Buat/select project.
-3. Enable **Google Search Console API**.
-4. Buka **IAM & Admin → Service Accounts**.
-5. Buat service account, misalnya `gsc-rank-monitor`.
-6. Buat **JSON key** untuk service account tersebut.
-7. Dari file JSON, ambil:
-   - `client_email`
-   - `private_key`
-8. Di Google Search Console, tambahkan email service account tadi ke property `panentogel.com` dengan izin yang mencukupi (paling mudah sebagai owner/delegated owner untuk setup awal).
+Endpoint tersebut mendukung Google rank tracking hingga 100 organic result serta parameter mobile/location.
 
-JANGAN upload file JSON tersebut ke GitHub.
+## 3. Deploy repository ke Vercel
 
-## 5. Deploy GitHub repo ke Vercel
+Pastikan repository GitHub Anda terhubung ke project Vercel.
 
-Import repo GitHub tadi ke Vercel.
+Di Vercel buka:
 
-Di **Vercel → Project → Settings → Environment Variables**, buat:
+**Project -> Settings -> Environment Variables**
+
+Tambahkan variabel berikut:
 
 ```text
 SUPABASE_URL=https://xxxx.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_xxxxx
-GOOGLE_CLIENT_EMAIL=gsc-rank-monitor@xxxx.iam.gserviceaccount.com
-GOOGLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n
-GSC_SITE_URL=sc-domain:panentogel.com
+SEARCHAPI_KEY=API_KEY_DARI_SEARCHAPI
 TARGET_QUERY=panen togel
 TARGET_DOMAIN=panentogel.com
-GSC_DEVICE=MOBILE
-GSC_COUNTRY=IDN
-CRON_SECRET=buat-string-random-yang-panjang
+SERP_DEVICE=mobile
+SERP_COUNTRY=id
+SERP_LANGUAGE=id
+SERP_LOCATION=Indonesia
+SERP_NUM_RESULTS=100
+CRON_SECRET=buat-random-string-panjang
 ```
 
-Untuk `GOOGLE_PRIVATE_KEY`, copy nilai private key dan pastikan line break berbentuk `\n` jika Vercel menyimpannya dalam satu baris.
+Setelah menyimpan environment variables, lakukan **Redeploy**.
 
-Lalu **Redeploy**.
+## 4. Test manual endpoint sync
 
-## 6. Test sinkronisasi manual
+Endpoint `/api/sync` dilindungi `CRON_SECRET`, jadi jangan membuka URL itu biasa dari browser.
 
-Karena `/api/sync` dilindungi secret, test dengan terminal:
+Cara paling mudah adalah melalui GitHub Actions setelah secret selesai dibuat pada langkah berikut.
 
-```bash
-curl -H "Authorization: Bearer ISI_CRON_SECRET" \
-  https://NAMA-PROJECT.vercel.app/api/sync
-```
+## 5. GitHub Actions setiap jam
 
-Jika berhasil, respons kira-kira:
+Di GitHub repo buka:
 
-```json
-{
-  "ok": true,
-  "inserted_or_updated": 12,
-  "latest": {
-    "position": 4.2
-  }
-}
-```
+**Settings -> Secrets and variables -> Actions -> New repository secret**
 
-Kalau `inserted_or_updated` = 0, itu tidak selalu error. Bisa berarti Google belum punya impression terbaru untuk keyword + device + negara tersebut.
+Buat 2 secret:
 
-## 7. Aktifkan sinkronisasi tiap jam dari GitHub
+### VERCEL_APP_URL
 
-Project sudah berisi:
+Isi URL production Vercel, contoh:
 
 ```text
-.github/workflows/hourly-sync.yml
+https://grank-live.vercel.app
 ```
 
-Di GitHub repository buka:
+### CRON_SECRET
 
-**Settings → Secrets and variables → Actions → New repository secret**
+Harus sama persis dengan `CRON_SECRET` yang Anda masukkan ke Vercel.
 
-Tambahkan dua secret:
+Workflow `.github/workflows/hourly-sync.yml` sudah disiapkan dan berjalan sekitar menit ke-7 setiap jam.
 
-### `VERCEL_APP_URL`
+Untuk tes pertama:
 
-Contoh:
+**GitHub -> Actions -> Hourly Google Rank Sync -> Run workflow**
+
+Jika sukses, buka URL website Vercel dan tekan Refresh.
+
+## 6. Tentang quota gratis
+
+SearchAPI.io menyediakan jumlah request gratis terbatas untuk mencoba layanan. Jika dicek setiap jam, 1 keyword membutuhkan sekitar 24 request/hari atau sekitar 720 request/bulan. Jadi free trial tidak cukup untuk pemakaian setiap jam dalam jangka panjang.
+
+Tujuan versi ini adalah pertama-tama mengecek apakah hasil mobile/Indonesia lebih cocok dengan Google yang Anda lihat. Setelah hasil sudah cocok, provider dapat diganti tanpa mengubah frontend/Supabase.
+
+## File penting
 
 ```text
-https://nama-project.vercel.app
+index.html                 dashboard
+style.css                  tampilan
+app.js                     frontend
+api/data.js                baca Supabase
+api/sync.js                jalankan pengecekan SERP
+lib/searchapi.js           koneksi SearchAPI.io + pencocokan domain
+lib/supabase.js            koneksi Supabase
+schema.sql                 schema/migrasi database
+.github/workflows/...      trigger tiap jam
+.env.example               contoh environment variables
 ```
 
-### `CRON_SECRET`
+## Keamanan
 
-Harus sama persis dengan `CRON_SECRET` di Vercel.
+Jangan pernah commit ke GitHub:
 
-Setelah itu buka tab **Actions**, pilih **Hourly Google Rank Sync**, lalu klik **Run workflow** untuk tes pertama.
+- `SEARCHAPI_KEY`
+- `SUPABASE_SECRET_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `CRON_SECRET`
 
-Workflow dijadwalkan pada menit ke-7 setiap jam (`7 * * * *`). GitHub schedule tidak menjamin detik/menit yang benar-benar presisi, tetapi cocok untuk update sekitar tiap jam.
-
-## 8. Buka dashboard
-
-Buka domain Vercel kamu. Dashboard akan menampilkan:
-
-- Keyword
-- Domain
-- Average position terbaru
-- Perubahan dibanding titik data sebelumnya
-- Impression
-- Clicks / CTR
-- Device + negara
-- Riwayat posisi
-- Waktu data Google
-- Waktu sinkronisasi terakhir
-
-Frontend otomatis refresh setiap 60 detik, tetapi data Google hanya berubah ketika Search Console sudah punya data baru dan job sinkronisasi mengambilnya.
-
-## Troubleshooting
-
-### `User does not have sufficient permission for site`
-
-Biasanya `GOOGLE_CLIENT_EMAIL` belum diberi akses ke property Search Console, atau `GSC_SITE_URL` tidak sama persis dengan property.
-
-### `Belum ada data impression`
-
-Coba sementara kosongkan `GSC_DEVICE` dan `GSC_COUNTRY` di Vercel untuk memperluas data. Jika setelah itu muncul, berarti kombinasi `MOBILE + IDN` memang belum punya impression di periode terbaru.
-
-### Private key error
-
-Pastikan environment `GOOGLE_PRIVATE_KEY` memiliki header/footer private key dan `\n` yang benar.
-
-### Vercel Hobby
-
-Project ini sengaja **tidak** memakai Vercel Cron per jam. Vercel Hobby membatasi cron menjadi sekali per hari, jadi jadwal hourly dijalankan oleh GitHub Actions dan hanya memanggil endpoint Vercel yang dilindungi `CRON_SECRET`.
+Semua secret hanya dimasukkan melalui Vercel Environment Variables / GitHub Actions Secrets.
