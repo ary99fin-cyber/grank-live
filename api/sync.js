@@ -20,6 +20,15 @@ function hourBucket(value) {
   return date.toISOString();
 }
 
+function cleanDomain(value = '') {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .split('/')[0];
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return json(res, 405, { ok: false, error: 'Method not allowed' });
@@ -28,17 +37,24 @@ export default async function handler(req, res) {
     return json(res, 401, { ok: false, error: 'Unauthorized' });
   }
 
-  const supabase = getSupabaseAdmin();
   const fallbackQuery = (process.env.TARGET_QUERY || '').trim();
-  const fallbackDomain = (process.env.TARGET_DOMAIN || '').trim().toLowerCase();
+  const fallbackDomain = cleanDomain(process.env.TARGET_DOMAIN || '');
   const fallbackDevice = (process.env.SERP_DEVICE || 'mobile').toUpperCase();
   const fallbackCountry = (process.env.SERP_COUNTRY || 'id').toUpperCase();
   const syncTime = new Date().toISOString();
 
+  let supabase = null;
+  let stage = 'initializing';
+
   try {
+    stage = 'supabase_init';
+    supabase = getSupabaseAdmin();
+
+    stage = 'searchapi_request';
     const snapshot = await fetchRankSnapshot();
     const dataHour = hourBucket(snapshot.checkedAt);
 
+    stage = 'save_history';
     const historyRow = {
       query: snapshot.query,
       domain: snapshot.domain,
@@ -57,8 +73,9 @@ export default async function handler(req, res) {
     const { error: historyError } = await supabase
       .from('rank_history')
       .upsert(historyRow, { onConflict: 'query,domain,device,country,data_hour' });
-    if (historyError) throw historyError;
+    if (historyError) throw new Error(`Supabase rank_history: ${historyError.message}`);
 
+    stage = 'save_status';
     const message = snapshot.found
       ? `${snapshot.domain} ditemukan di posisi #${snapshot.position}.`
       : `${snapshot.domain} tidak ditemukan pada ${snapshot.resultsChecked || snapshot.requestedNum} hasil organic yang diperiksa.`;
@@ -83,7 +100,7 @@ export default async function handler(req, res) {
     const { error: statusError } = await supabase
       .from('rank_status')
       .upsert(statusRow, { onConflict: 'query,domain,device,country' });
-    if (statusError) throw statusError;
+    if (statusError) throw new Error(`Supabase rank_status: ${statusError.message}`);
 
     return json(res, 200, {
       ok: true,
@@ -104,20 +121,27 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     const message = error?.message || String(error);
+    console.error('SERP sync failed', { stage, message });
 
-    if (fallbackQuery && fallbackDomain) {
-      await supabase.from('rank_status').upsert({
-        query: fallbackQuery,
-        domain: fallbackDomain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0],
-        device: fallbackDevice,
-        country: fallbackCountry,
-        status: 'error',
-        last_checked_at: syncTime,
-        provider: 'searchapi.io',
-        message
-      }, { onConflict: 'query,domain,device,country' });
+    if (supabase && fallbackQuery && fallbackDomain) {
+      try {
+        await supabase.from('rank_status').upsert({
+          query: fallbackQuery,
+          domain: fallbackDomain,
+          device: fallbackDevice,
+          country: fallbackCountry,
+          status: 'error',
+          last_checked_at: syncTime,
+          provider: 'searchapi.io',
+          message: `[${stage}] ${message}`
+        }, { onConflict: 'query,domain,device,country' });
+      } catch {}
     }
 
-    return json(res, 500, { ok: false, error: message });
+    return json(res, 500, {
+      ok: false,
+      stage,
+      error: message
+    });
   }
 }
