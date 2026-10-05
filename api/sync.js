@@ -20,41 +20,32 @@ function hourBucket(value) {
   return date.toISOString();
 }
 
-function cleanDomain(value = '') {
-  return String(value)
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/^www\./, '')
-    .split('/')[0];
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return json(res, 405, { ok: false, error: 'Method not allowed' });
   }
+
   if (!isAuthorized(req)) {
     return json(res, 401, { ok: false, error: 'Unauthorized' });
   }
 
+  const supabase = getSupabaseAdmin();
+
   const fallbackQuery = (process.env.TARGET_QUERY || '').trim();
-  const fallbackDomain = cleanDomain(process.env.TARGET_DOMAIN || '');
+  const fallbackDomain = (process.env.TARGET_DOMAIN || '')
+    .trim()
+    .toLowerCase();
+
   const fallbackDevice = (process.env.SERP_DEVICE || 'mobile').toUpperCase();
   const fallbackCountry = (process.env.SERP_COUNTRY || 'id').toUpperCase();
+
   const syncTime = new Date().toISOString();
 
-  let supabase = null;
-  let stage = 'initializing';
-
   try {
-    stage = 'supabase_init';
-    supabase = getSupabaseAdmin();
-
-    stage = 'searchapi_request';
     const snapshot = await fetchRankSnapshot();
+
     const dataHour = hourBucket(snapshot.checkedAt);
 
-    stage = 'save_history';
     const historyRow = {
       query: snapshot.query,
       domain: snapshot.domain,
@@ -72,13 +63,19 @@ export default async function handler(req, res) {
 
     const { error: historyError } = await supabase
       .from('rank_history')
-      .upsert(historyRow, { onConflict: 'query,domain,device,country,data_hour' });
-    if (historyError) throw new Error(`Supabase rank_history: ${historyError.message}`);
+      .upsert(historyRow, {
+        onConflict: 'query,domain,device,country,data_hour'
+      });
 
-    stage = 'save_status';
+    if (historyError) {
+      throw historyError;
+    }
+
     const message = snapshot.found
       ? `${snapshot.domain} ditemukan di posisi #${snapshot.position}.`
-      : `${snapshot.domain} tidak ditemukan pada ${snapshot.resultsChecked || snapshot.requestedNum} hasil organic yang diperiksa.`;
+      : `${snapshot.domain} tidak ditemukan pada ${
+          snapshot.resultsChecked || snapshot.requestedNum
+        } hasil organic yang diperiksa.`;
 
     const statusRow = {
       query: snapshot.query,
@@ -99,11 +96,17 @@ export default async function handler(req, res) {
 
     const { error: statusError } = await supabase
       .from('rank_status')
-      .upsert(statusRow, { onConflict: 'query,domain,device,country' });
-    if (statusError) throw new Error(`Supabase rank_status: ${statusError.message}`);
+      .upsert(statusRow, {
+        onConflict: 'query,domain,device,country'
+      });
+
+    if (statusError) {
+      throw statusError;
+    }
 
     return json(res, 200, {
       ok: true,
+
       target: {
         query: snapshot.query,
         domain: snapshot.domain,
@@ -111,6 +114,7 @@ export default async function handler(req, res) {
         country: snapshot.country,
         location: snapshot.location
       },
+
       found: snapshot.found,
       position: snapshot.position,
       result_url: snapshot.resultUrl,
@@ -119,28 +123,34 @@ export default async function handler(req, res) {
       provider: snapshot.provider,
       sample_top_5: snapshot.sample
     });
+
   } catch (error) {
     const message = error?.message || String(error);
-    console.error('SERP sync failed', { stage, message });
 
-    if (supabase && fallbackQuery && fallbackDomain) {
-      try {
-        await supabase.from('rank_status').upsert({
+    if (fallbackQuery && fallbackDomain) {
+      await supabase
+        .from('rank_status')
+        .upsert({
           query: fallbackQuery,
-          domain: fallbackDomain,
+
+          domain: fallbackDomain
+            .replace(/^https?:\/\//, '')
+            .replace(/^www\./, '')
+            .split('/')[0],
+
           device: fallbackDevice,
           country: fallbackCountry,
           status: 'error',
           last_checked_at: syncTime,
           provider: 'searchapi.io',
-          message: `[${stage}] ${message}`
-        }, { onConflict: 'query,domain,device,country' });
-      } catch {}
+          message
+        }, {
+          onConflict: 'query,domain,device,country'
+        });
     }
 
     return json(res, 500, {
       ok: false,
-      stage,
       error: message
     });
   }
