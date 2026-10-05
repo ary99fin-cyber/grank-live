@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>Google Rank Monitor</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">GOOGLE SEARCH CONSOLE</p>
+        <h1>Google Rank Monitor</h1>
+        <p class="sub">Pantau average position keyword dari data resmi Search Console.</p>
+      </div>
+      <button id="refreshBtn" type="button">Refresh</button>
+    </section>
+
+    <section id="alert" class="alert hidden"></section>
+
+    <section class="grid">
+      <article class="card main-card">
+        <p class="label">Average Position Terbaru</p>
+        <div class="rank-row">
+          <strong id="position" class="position">—</strong>
+          <span id="change" class="change">Menunggu data</span>
+        </div>
+        <p id="partial" class="muted"></p>
+      </article>
+
+      <article class="card">
+        <p class="label">Keyword</p>
+        <strong id="keyword">—</strong>
+        <p class="muted">Exact query</p>
+      </article>
+
+      <article class="card">
+        <p class="label">Domain</p>
+        <strong id="domain">—</strong>
+        <p id="scope" class="muted">—</p>
+      </article>
+
+      <article class="card">
+        <p class="label">Impressions</p>
+        <strong id="impressions">—</strong>
+        <p id="clicks" class="muted">Clicks: —</p>
+      </article>
+    </section>
+
+    <section class="card chart-card">
+      <div class="chart-header">
+        <div>
+          <p class="label">Riwayat posisi</p>
+          <h2>72 titik data terbaru</h2>
+        </div>
+        <div class="legend"><span></span> Semakin kecil semakin bagus</div>
+      </div>
+      <canvas id="rankChart" width="1200" height="420" aria-label="Grafik posisi Google"></canvas>
+      <div id="emptyChart" class="empty hidden">Belum ada riwayat posisi untuk ditampilkan.</div>
+    </section>
+
+    <section class="card details">
+      <div><span>Jam data Google</span><strong id="dataHour">—</strong></div>
+      <div><span>Terakhir dicek</span><strong id="checkedAt">—</strong></div>
+      <div><span>Status sinkronisasi</span><strong id="syncStatus">—</strong></div>
+    </section>
+
+    <p class="footnote">
+      Catatan: angka yang ditampilkan adalah <b>average position</b> dari Google Search Console berdasarkan impression nyata,
+      bukan hasil snapshot SERP personal dari satu HP. Data terbaru Google dapat terlambat beberapa jam.
+    </p>
+  </main>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
